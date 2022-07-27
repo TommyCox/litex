@@ -68,9 +68,9 @@ static void sdram_bist_handler(int nb_params, char **params)
 {
 	char *c;
 	int burst_length;
-	int random;
+	int amode;
 	if (nb_params < 2) {
-		printf("sdram_bist <burst_length> <random>");
+		printf("sdram_bist <burst_length> <addr_mode: 0=fixed, 1=linear, 2=random>");
 		return;
 	}
 	burst_length = strtoul(params[0], &c, 0);
@@ -78,12 +78,20 @@ static void sdram_bist_handler(int nb_params, char **params)
 		printf("Incorrect burst_length");
 		return;
 	}
-	random = strtoul(params[1], &c, 0);
+	amode = strtoul(params[1], &c, 0);
 	if (*c != 0) {
-		printf("Incorrect random");
+		printf("Incorrect addr_mode");
 		return;
 	}
-	sdram_bist(burst_length, random);
+	if (nb_params == 3) {
+		extern uint32_t rand_data;
+		rand_data = strtoul(params[2], &c, 0);
+		if (*c != 0) {
+			printf("Incorrect rand_data");
+			return;
+		}
+	}
+	sdram_bist(burst_length, amode);
 }
 define_command(sdram_bist, sdram_bist_handler, "Run SDRAM Build-In Self-Test", LITEDRAM_CMDS);
 #endif

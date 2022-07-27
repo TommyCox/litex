@@ -446,21 +446,6 @@ class SoCBusHandler(Module):
             colorer(name, color="underline"),
             colorer("added", color="green")))
 
-    def get_address_width(self, standard):
-        standard_from = self.standard
-        standard_to   = standard
-
-        # AXI or AXI-Lite SoC Bus and Wishbone requested:
-        if standard_from in ["axi", "axi-lite"] and standard_to in ["wishbone"]:
-            address_shift = log2_int(self.data_width//8)
-            return self.address_width - address_shift
-        # Wishbone SoC Bus and AXI, AXI-Lite requested:
-        if standard_from in ["wishbone"] and standard_to in ["axi", "axi-lite"]:
-            address_shift = log2_int(self.data_width//8)
-            return self.address_width + address_shift
-        # Else just return address_width:
-        return self.address_width
-
     # Str ------------------------------------------------------------------------------------------
     def __str__(self):
         r = "{}-bit {} Bus, {}GiB Address Space.\n".format(
@@ -1063,7 +1048,7 @@ class SoC(Module):
                     name             = "SoCDMABusHandler",
                     standard         = "wishbone",
                     data_width       = self.bus.data_width,
-                    address_width    = self.bus.get_address_width(standard="wishbone"),
+                    address_width    = self.bus.address_width,
                     bursting         = self.bus.bursting
                 )
                 dma_bus = wishbone.Interface(data_width=self.bus.data_width)
@@ -1423,7 +1408,8 @@ class LiteXSoC(SoC):
 
     # Add SDRAM ------------------------------------------------------------------------------------
     def add_sdram(self, name="sdram", phy=None, module=None, origin=None, size=None,
-        with_bist               = False,
+        with_bist               = True,
+        with_ecc                = True,
         with_soc_interconnect   = True,
         l2_cache_size           = 8192,
         l2_cache_min_data_width = 128,
@@ -1437,6 +1423,7 @@ class LiteXSoC(SoC):
         from litedram.frontend.wishbone import LiteDRAMWishbone2Native
         from litedram.frontend.axi import LiteDRAMAXI2Native
         from litedram.frontend.bist import  LiteDRAMBISTGenerator, LiteDRAMBISTChecker
+        from litedram.frontend.ecc import LiteDRAMNativePortECC
 
         # LiteDRAM core.
         self.check_if_exists(name)
@@ -1470,8 +1457,38 @@ class LiteXSoC(SoC):
 
         # LiteDRAM BIST.
         if with_bist:
-            sdram_generator = LiteDRAMBISTGenerator(sdram.crossbar.get_port())
-            sdram_checker   = LiteDRAMBISTChecker(  sdram.crossbar.get_port())
+            if with_ecc:
+                ecc_port_w  = sdram.crossbar.get_port()
+                user_port_w = LiteDRAMNativePort(
+                    mode          = ecc_port_w.mode,
+                    address_width = ecc_port_w.address_width,
+                    data_width    = ecc_port_w.data_width//2
+                )
+                ecc_w = LiteDRAMNativePortECC(
+                    user_port_w, ecc_port_w,
+                    burst_cycles=user_port_w.data_width//8,
+                    with_error_injection=True
+                )
+                setattr(self.submodules, f"{name}_eccw", ecc_w)
+
+                ecc_port_r  = sdram.crossbar.get_port()
+                user_port_r = LiteDRAMNativePort(
+                    mode          = ecc_port_r.mode,
+                    address_width = ecc_port_r.address_width,
+                    data_width    = ecc_port_r.data_width//2
+                )
+                ecc_r = LiteDRAMNativePortECC(
+                    user_port_r, ecc_port_r,
+                    burst_cycles=user_port_r.data_width//8,
+                    with_error_injection=True
+                )
+                setattr(self.submodules, f"{name}_eccr", ecc_r)
+            else:
+                user_port_w = sdram.crossbar.get_port()
+                user_port_r = sdram.crossbar.get_port()
+
+            sdram_generator = LiteDRAMBISTGenerator(user_port_w)
+            sdram_checker   = LiteDRAMBISTChecker(user_port_r)
             setattr(self.submodules, f"{name}_generator", sdram_generator)
             setattr(self.submodules, f"{name}_checker",   sdram_checker)
 
@@ -1818,7 +1835,7 @@ class LiteXSoC(SoC):
 
         # Block2Mem DMA.
         if "read" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.get_address_width(standard="wishbone"))
+            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
             self.submodules.sdblock2mem = SDBlock2MemDMA(bus=bus, endianness=self.cpu.endianness)
             self.comb += self.sdcore.source.connect(self.sdblock2mem.sink)
             dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
@@ -1826,20 +1843,20 @@ class LiteXSoC(SoC):
 
         # Mem2Block DMA.
         if "write" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.get_address_width(standard="wishbone"))
+            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
             self.submodules.sdmem2block = SDMem2BlockDMA(bus=bus, endianness=self.cpu.endianness)
             self.comb += self.sdmem2block.source.connect(self.sdcore.sink)
             dma_bus = self.bus if not hasattr(self, "dma_bus") else self.dma_bus
             dma_bus.add_master("sdmem2block", master=bus)
 
         # Interrupts.
-        self.submodules.sdirq  = EventManager()
-        self.sdirq.card_detect = EventSourcePulse(description="SDCard has been ejected/inserted.")
+        self.submodules.sdirq = EventManager()
+        self.sdirq.card_detect   = EventSourcePulse(description="SDCard has been ejected/inserted.")
         if "read" in mode:
             self.sdirq.block2mem_dma = EventSourcePulse(description="Block2Mem DMA terminated.")
         if "write" in mode:
             self.sdirq.mem2block_dma = EventSourcePulse(description="Mem2Block DMA terminated.")
-        self.sdirq.cmd_done  = EventSourceLevel(description="Command completed.")
+        self.sdirq.cmd_done      = EventSourceLevel(description="Command completed.")
         self.sdirq.finalize()
         if "read" in mode:
             self.comb += self.sdirq.block2mem_dma.trigger.eq(self.sdblock2mem.irq)
@@ -1890,7 +1907,7 @@ class LiteXSoC(SoC):
 
         # Sector2Mem DMA.
         if "read" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.get_address_width(standard="wishbone"))
+            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
             self.submodules.sata_sector2mem = LiteSATASector2MemDMA(
                port       = self.sata_crossbar.get_port(),
                bus        = bus,
@@ -1900,7 +1917,7 @@ class LiteXSoC(SoC):
 
         # Mem2Sector DMA.
         if "write" in mode:
-            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.get_address_width(standard="wishbone"))
+            bus = wishbone.Interface(data_width=self.bus.data_width, adr_width=self.bus.address_width)
             self.submodules.sata_mem2sector = LiteSATAMem2SectorDMA(
                bus        = bus,
                port       = self.sata_crossbar.get_port(),

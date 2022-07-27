@@ -2,6 +2,7 @@
 // License: BSD
 
 #include <generated/csr.h>
+#include <generated/mem.h>
 #if defined(CSR_SDRAM_GENERATOR_BASE) && defined(CSR_SDRAM_CHECKER_BASE)
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +13,21 @@
 
 #include <liblitedram/bist.h>
 
+#if !defined(MAIN_RAM_SIZE)
+#define MAIN_RAM_SIZE 0x08000000
+#endif
+
 #define SDRAM_TEST_BASE 0x00000000
 #define SDRAM_TEST_DATA_BYTES (CSR_SDRAM_DFII_PI0_RDDATA_SIZE*4)
+
+#if defined(CSR_SDRAM_ECCR_BASE)
+#define SDRAM_TEST_SIZE MAIN_RAM_SIZE/2
+#else
+#define SDRAM_TEST_SIZE MAIN_RAM_SIZE
+#endif
+
+/* If 0, generate sequential data; if 1, generate random data */
+uint32_t rand_data = 1;
 
 uint32_t wr_ticks;
 uint32_t wr_length;
@@ -31,7 +45,8 @@ __attribute__((unused)) static void cdelay(int i)
 #endif
 }
 
-static uint32_t pseudo_random_bases[128] = {
+#define PRB_SIZE (sizeof(pseudo_random_bases)/sizeof(pseudo_random_bases[0]))
+static uint32_t pseudo_random_bases[] = {
 	0x000e4018,0x0003338d,0x00233429,0x001f589d,
 	0x001c922b,0x0011dc60,0x000d1e8f,0x000b20cf,
 	0x00360188,0x00041174,0x0003d065,0x000bfe34,
@@ -66,61 +81,74 @@ static uint32_t pseudo_random_bases[128] = {
 	0x00027e36,0x000e51ae,0x002e7627,0x00275c9f,
 };
 
-void sdram_bist_loop(uint32_t loop, uint32_t burst_length, uint32_t random) {
+static inline void sdram_generator_init(uint32_t base, uint32_t length) {
+	sdram_generator_reset_write(1);
+	sdram_generator_reset_write(0);
+	sdram_generator_random_write(rand_data);
+	sdram_generator_base_write(base);
+	sdram_generator_end_write(base + length);
+	sdram_generator_length_write(length);
+	cdelay(100);
+}
+
+static inline void sdram_checker_init(uint32_t base, uint32_t length) {
+	sdram_checker_reset_write(1);
+	sdram_checker_reset_write(0);
+	sdram_checker_random_write(rand_data);
+	sdram_checker_base_write(base);
+	sdram_checker_end_write(base + length);
+	sdram_checker_length_write(length);
+	cdelay(100);
+}
+
+static void sdram_clear_counts(void) {
+	wr_length = 0;
+	wr_ticks  = 0;
+	rd_length = 0;
+	rd_ticks  = 0;
+	rd_errors = 0;
+}
+
+#define TARGET_BYTES 0x20000
+/* burst_length of 1, DMA transaction is about 468 cycles */
+/* burst_length > 0x400, DMA transaction is about 1 cycle per word */
+
+void sdram_bist_loop(uint32_t burst_length, uint32_t amode) {
 	int i;
-	uint32_t base;
-	uint32_t length;
-	length = burst_length*SDRAM_TEST_DATA_BYTES;
+	uint32_t base = SDRAM_TEST_BASE;
+	uint32_t length = burst_length*SDRAM_TEST_DATA_BYTES;
+	uint32_t loop_cnt = (TARGET_BYTES > length) ? TARGET_BYTES / length : 1;
 
 	rd_errors = 0;
-	for(i=0; i<128; i++) {
-		if (random)
-			base = SDRAM_TEST_BASE + pseudo_random_bases[(i+loop)%128]*SDRAM_TEST_DATA_BYTES;
-		else
-			base = SDRAM_TEST_BASE + ((i+loop)%128)*SDRAM_TEST_DATA_BYTES;
-		if (i == 0) {
-			/* Prepare first write */
-			sdram_generator_reset_write(1);
-			sdram_generator_reset_write(0);
-			sdram_generator_random_write(1); /* Random data */
-			sdram_generator_base_write(base);
-			sdram_generator_end_write(base + length);
-			sdram_generator_length_write(length);
-			cdelay(100);
-		}
+	/* Prepare first write */
+	sdram_generator_init(base, length);
+	for (i = 0; i < loop_cnt; i++) {
 		/* Start write */
 		sdram_generator_start_write(1);
 		/* Prepare next read */
-		sdram_checker_reset_write(1);
-		sdram_checker_reset_write(0);
-		sdram_checker_random_write(1); /* Random data */
-		sdram_checker_base_write(base);
-		sdram_checker_end_write(base + length);
-		sdram_checker_length_write(length);
-		cdelay(100);
+		sdram_checker_init(base, length);
 		/* Wait write */
-		while(sdram_generator_done_read() == 0);
+		while (sdram_generator_done_read() == 0);
 		/* Get write results */
-		wr_length += length;
 		wr_ticks += sdram_generator_ticks_read();
+		wr_length += length;
 		/* Start read */
 		sdram_checker_start_write(1);
-		if (i != 127) {
-			if (random)
-				base = SDRAM_TEST_BASE + pseudo_random_bases[(i+1+loop)%128]*SDRAM_TEST_DATA_BYTES;
-			else
-				base = SDRAM_TEST_BASE + ((i+1+loop)%128)*SDRAM_TEST_DATA_BYTES;
+		if (i != loop_cnt-1) {
+			switch (amode) {
+			case 1:
+				base = base + length;
+				if (base >= (SDRAM_TEST_BASE+SDRAM_TEST_SIZE)) base = SDRAM_TEST_BASE;
+				break;
+			case 2:
+				base = SDRAM_TEST_BASE + pseudo_random_bases[i%PRB_SIZE]*SDRAM_TEST_DATA_BYTES;
+				break;
+			}
 			/* Prepare next write */
-			sdram_generator_reset_write(1);
-			sdram_generator_reset_write(0);
-			sdram_generator_random_write(1); /* Random data */
-			sdram_generator_base_write(base);
-			sdram_generator_end_write(base + length);
-			sdram_generator_length_write(length);
-			cdelay(100);
+			sdram_generator_init(base, length);
 		}
 		/* Wait read */
-		while(sdram_checker_done_read() == 0);
+		while (sdram_checker_done_read() == 0);
 		/* Get read results */
 		rd_ticks  += sdram_checker_ticks_read();
 		rd_errors += sdram_checker_errors_read();
@@ -135,46 +163,69 @@ static uint32_t compute_speed_mibs(uint32_t length, uint32_t ticks) {
 	return speed;
 }
 
-void sdram_bist(uint32_t burst_length, uint32_t random)
+void sdram_bist(uint32_t burst_length, uint32_t amode)
 {
 	uint32_t i;
+	uint32_t uc; /* update count */
+	uint32_t uf; /* update frequency */
 	uint32_t total_length;
 	uint32_t total_errors;
 
-	printf("Starting SDRAM BIST with burst_length=%d and random=%d\n", burst_length, random);
-
+	printf("Starting SDRAM BIST with burst_length=%lu and addr_mode=%lu\n", burst_length, amode);
+#if defined(CSR_SDRAM_ECCR_BASE)
+	sdram_eccr_clear_write(1);
+	sdram_eccr_clear_write(0);
+#endif
+	sdram_clear_counts();
 	i = 0;
+	uc = 0;
+	uf = burst_length * 2 + 2;
 	total_length = 0;
 	total_errors = 0;
-	for(;;) {
+	for (;;) {
 		/* Exit on key pressed */
 		if (readchar_nonblock())
 			break;
 
-		/* Bist loop */
-		sdram_bist_loop(i, burst_length, random);
-
-		/* Results */
-		if (i%1000 == 0) {
-			printf("WR-SPEED(MiB/s) RD-SPEED(MiB/s)  TESTED(MiB)       ERRORS\n");
+		/* Header */
+		if (uc%8 == 0 && wr_length == 0) {
+#if defined(CSR_SDRAM_ECCR_BASE)
+			printf("WR-BW(MiB/s) RD-BW(MiB/s)  TESTED(MiB)     ERRORS        SEC        DED\n");
+#else
+			printf("WR-BW(MiB/s) RD-BW(MiB/s)  TESTED(MiB)     ERRORS\n");
+#endif
 		}
-		if (i%100 == 100-1) {
-			printf("%15u %15u %12u %12u\n",
-			compute_speed_mibs(wr_length, wr_ticks),
-			compute_speed_mibs(rd_length, rd_ticks),
-			total_length/(1024*1024),
-			total_errors);
+
+		/* Bist loop */
+		sdram_bist_loop(burst_length, amode);
+
+		i++;
+		/* Results, update about once per second */
+		if ((burst_length < 0x100 && i%uf == 0) ||
+			(wr_ticks >= CONFIG_CLOCK_FREQUENCY/2)) {
+			uc++;
 			total_length += wr_length;
 			total_errors += rd_errors;
 
+#if defined(CSR_SDRAM_ECCR_BASE)
+			printf("%12lu %12lu %12lu %10lu %10lu %10lu\n",
+				compute_speed_mibs(wr_length, wr_ticks),
+				compute_speed_mibs(rd_length, rd_ticks),
+				total_length/(1024*1024),
+				total_errors,
+				sdram_eccr_sec_errors_read(),
+				sdram_eccr_ded_errors_read());
+#else
+			printf("%12lu %12lu %12lu %10lu\n",
+				compute_speed_mibs(wr_length, wr_ticks),
+				compute_speed_mibs(rd_length, rd_ticks),
+				total_length/(1024*1024),
+				total_errors);
+#endif
+
 			/* Clear length/ticks/errors */
-			wr_length = 0;
-			wr_ticks  = 0;
-			rd_length = 0;
-			rd_ticks  = 0;
-			rd_errors = 0;
+			sdram_clear_counts();
 		}
-		i++;
 	}
 }
 
