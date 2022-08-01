@@ -81,7 +81,7 @@ git_repos = {
     # LiteX Cores Ecosystem.
     # ----------------------
     "liteeth":      GitRepo(url="https://github.com/enjoy-digital/", tag=True),
-    "litedram":     GitRepo(url="https://github.com/TommyCox", tag=True),
+    "litedram":     GitRepo(url="https://github.com/TommyCox/", tag=True),
     "litepcie":     GitRepo(url="https://github.com/enjoy-digital/", tag=True),
     "litesata":     GitRepo(url="https://github.com/enjoy-digital/", tag=True),
     "litesdcard":   GitRepo(url="https://github.com/enjoy-digital/", tag=True),
