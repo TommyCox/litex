@@ -290,17 +290,14 @@ void sdram_bist_chk(uint32_t base, uint32_t length, int dmode) {
 #if defined(CSR_SDRAM_ECCR_BASE)
 	sec = sdram_eccr_sec_errors_read();
 	ded = sdram_eccr_ded_errors_read();
-	printf("ERRORS: %lu, SEC: %lu, DED: %lu\n", errors, sec, ded);
 	errors += sec + ded;
-#else
-	printf("ERRORS: %lu\n", errors);
 #endif
 
 	if (errors) {
 #if defined(DISPLAY_ERRORS) && !defined(CSR_SDRAM_ECCR_BASE)
 		display_errors(base, length, dmode);
 #endif
-	}
+	} else printf("ERRORS: 0\n");
 }
 
 void sdram_bist(uint32_t length, int amode, int dmode, int wmode) {
