@@ -30,6 +30,15 @@ int memtest_bus(unsigned int *addr, unsigned long size);
 int memtest_addr(unsigned int *addr, unsigned long size, int random);
 int memtest_data(unsigned int *addr, unsigned long size, int random, struct memtest_config *config);
 
+/*
+   Description: inject errors (flip bits) in a memory range
+   addr (word aligned) and size (in bytes): determines the memory range
+   cnt: number of errors to inject
+   pat: bit pattern that determines the bits to flip in a word
+   bits: width of pattern in bits
+*/
+void memtest_inject_errors(unsigned int *addr, unsigned long size, unsigned cnt, unsigned pat, unsigned bits);
+
 void memspeed(unsigned int *addr, unsigned long size, bool read_only, bool random);
 int memtest(unsigned int *addr, unsigned long maxsize);
 
