@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <system.h>
+#include <stdlib.h> /* rand */
 
 #include <generated/soc.h>
 #include <generated/csr.h>
@@ -37,6 +38,9 @@
 #define MEMTEST_ADDR_SIZE (32*1024)
 #endif
 #define MEMTEST_ADDR_RANDOM 0
+
+#define PROGRESS_CNT 0x80000
+
 
 static unsigned int seed_to_data_32(unsigned int seed, int random)
 {
@@ -206,11 +210,13 @@ int memtest_data(unsigned int *addr, unsigned long size, int random, struct memt
 		for(i=0; i<size/4; i++) {
 			seed_32 = seed_to_data_32(seed_32, random);
 			array[i] = seed_32;
-			if (i%0x8000 == 0)
+			if (i%PROGRESS_CNT == 0 && progress)
 				print_progress("  Write:", (unsigned long)addr, 4*i);
 		}
-		print_progress("  Write:", (unsigned long)addr, 4*i);
-		printf("\n");
+		if (progress) {
+			print_progress("  Write:", (unsigned long)addr, 4*i);
+			printf("\n");
+		}
 	}
 
 	/* Flush caches */
@@ -245,7 +251,7 @@ int memtest_data(unsigned int *addr, unsigned long size, int random, struct memt
 				printf("memtest_data error @ %p: 0x%08x vs 0x%08x\n", addr + i, rdata, seed_32);
 #endif
 		}
-		if (i%0x8000 == 0 && progress)
+		if (i%PROGRESS_CNT == 0 && progress)
 			print_progress("   Read:", (unsigned long)addr, 4*i);
 	}
 	if (progress) {
@@ -254,6 +260,27 @@ int memtest_data(unsigned int *addr, unsigned long size, int random, struct memt
 	}
 
 	return errors;
+}
+
+/*
+   Description: inject errors (flip bits) in a memory range
+   addr (word aligned) and size (in bytes, power of 2): determines the memory range
+   cnt: number of errors to inject
+   pat: bit pattern that determines the bits to flip in a word
+   bits: width of pattern in bits
+*/
+void memtest_inject_errors(unsigned int *addr, unsigned long size, unsigned cnt, unsigned pat, unsigned bits)
+{
+	typedef unsigned int word;
+	volatile word *array = (word *)addr;
+	while (cnt > 0) {
+		size_t offset = rand() & (size/sizeof(word)-1); /* word offset */
+		unsigned shift = rand() % ((sizeof(word)*8+1)-bits);
+		array[offset] ^= (word)pat << shift;
+		cnt--;
+	}
+	flush_cpu_dcache();
+	flush_l2_cache();
 }
 
 void memspeed(unsigned int *addr, unsigned long size, bool read_only, bool random)

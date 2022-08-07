@@ -1407,9 +1407,9 @@ class LiteXSoC(SoC):
         self.bus.add_master(name=name, master=jtagbone.wishbone)
 
     # Add SDRAM ------------------------------------------------------------------------------------
-    def add_sdram(self, name="sdram", phy=None, module=None, origin=None, size=None,
+    def add_sdram(self, name="sdram", phy=None, module=None, origin=None, size=None, software_debug=False,
         with_bist               = True,
-        with_ecc                = True,
+        with_ecc                = False,
         with_soc_interconnect   = True,
         l2_cache_size           = 8192,
         l2_cache_min_data_width = 128,
@@ -1491,6 +1491,7 @@ class LiteXSoC(SoC):
             sdram_checker   = LiteDRAMBISTChecker(user_port_r)
             setattr(self.submodules, f"{name}_generator", sdram_generator)
             setattr(self.submodules, f"{name}_checker",   sdram_checker)
+            self.add_config("BIST_DATA_WIDTH", user_port_r.data_width)
 
         if not with_soc_interconnect: return
 
@@ -1594,7 +1595,7 @@ class LiteXSoC(SoC):
 
             # L2 Cache
             if l2_cache_size != 0:
-                # Insert L2 cache inbetween Wishbone bus and LiteDRAM
+                # Insert L2 cache in between Wishbone bus and LiteDRAM
                 l2_cache_size = max(l2_cache_size, int(2*port.data_width/8)) # Use minimal size if lower
                 l2_cache_size = 2**int(log2(l2_cache_size))                  # Round to nearest power of 2
                 l2_cache_data_width = max(port.data_width, l2_cache_min_data_width)
@@ -1618,6 +1619,10 @@ class LiteXSoC(SoC):
                 port         = port,
                 base_address = self.bus.regions["main_ram"].origin
             )
+
+        # Debug.
+        if software_debug:
+            self.add_constant("SDRAM_DEBUG")
 
     # Add Ethernet ---------------------------------------------------------------------------------
     def add_ethernet(self, name="ethmac", phy=None, phy_cd="eth", dynamic_ip=False, software_debug=False,

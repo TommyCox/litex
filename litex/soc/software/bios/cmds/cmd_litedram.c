@@ -4,12 +4,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <libbase/memtest.h>
 
-#include <generated/soc.h>
 #include <generated/csr.h>
 #include <generated/mem.h>
+#include <generated/soc.h>
+
 #include <libbase/i2c.h>
+#include <libbase/memtest.h>
 
 #include <liblitedram/sdram.h>
 #include <liblitedram/bist.h>
@@ -52,49 +53,170 @@ define_command(sdram_cal, sdram_cal_handler, "Calibrate SDRAM", LITEDRAM_CMDS);
 #if defined(CSR_SDRAM_BASE)
 static void sdram_test_handler(int nb_params, char **params)
 {
-	memtest((unsigned int *)MAIN_RAM_BASE, MAIN_RAM_SIZE/32);
+	memtest((unsigned int *)MAIN_RAM_BASE, MAIN_RAM_SIZE);
 }
 define_command(sdram_test, sdram_test_handler, "Test SDRAM", LITEDRAM_CMDS);
 #endif
 
+#if defined(CSR_SDRAM_GENERATOR_BASE) && defined(CSR_SDRAM_CHECKER_BASE)
 /**
- * Command "sdram_bist"
+ * Command "sdram_bist_pat"
  *
- * Run SDRAM Build-In Self-Test
+ * Set SDRAM Build-In Self-Test (BIST) Pattern
  *
  */
-#if defined(CSR_SDRAM_GENERATOR_BASE) && defined(CSR_SDRAM_CHECKER_BASE)
-static void sdram_bist_handler(int nb_params, char **params)
+static void sdram_pat_handler(int nb_params, char **params)
 {
 	char *c;
-	int burst_length;
-	int amode;
-	if (nb_params < 2) {
-		printf("sdram_bist <burst_length> <addr_mode: 0=fixed, 1=linear, 2=random>");
+	uint32_t value;
+
+	if (nb_params < 1) {
+		printf("sdram_bist_pat <value>");
 		return;
 	}
-	burst_length = strtoul(params[0], &c, 0);
+	value = strtoul(params[0], &c, 0);
 	if (*c != 0) {
 		printf("Incorrect burst_length");
 		return;
 	}
-	amode = strtoul(params[1], &c, 0);
-	if (*c != 0) {
-		printf("Incorrect addr_mode");
+	sdram_bist_pattern(value);
+}
+define_command(sdram_bist_pat, sdram_pat_handler, "Set SDRAM Build-In Self-Test Pattern", LITEDRAM_CMDS);
+
+/**
+ * Command "sdram_bist_gen"
+ *
+ * Run SDRAM Build-In Self-Test (BIST) Generator
+ *
+ */
+static void sdram_gen_handler(int nb_params, char **params)
+{
+	char *c;
+	uint32_t base;
+	uint32_t length;
+	int dmode = 2; /* default: random data*/
+
+	if (nb_params < 2) {
+		printf("sdram_bist_gen <base> <length> [<data_mode>]\n");
+		printf("base     : base address (starts at zero)\n");
+		printf("length   : DMA block size in bytes\n");
+		printf("data_mode: 0=pattern, 1=inc, 2=random");
 		return;
 	}
-	if (nb_params == 3) {
-		extern uint32_t rand_data;
-		rand_data = strtoul(params[2], &c, 0);
+	base = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Incorrect base");
+		return;
+	}
+	length = strtoul(params[1], &c, 0);
+	if (*c != 0) {
+		printf("Incorrect length");
+		return;
+	}
+	if (nb_params > 2) {
+		dmode = strtoul(params[2], &c, 0);
 		if (*c != 0) {
-			printf("Incorrect rand_data");
+			printf("Incorrect data_mode");
 			return;
 		}
 	}
-	sdram_bist(burst_length, amode);
+	sdram_bist_gen(base, length, dmode);
+}
+define_command(sdram_bist_gen, sdram_gen_handler, "Run SDRAM Build-In Self-Test Generator", LITEDRAM_CMDS);
+
+/**
+ * Command "sdram_bist_chk"
+ *
+ * Run SDRAM Build-In Self-Test (BIST) Checker
+ *
+ */
+static void sdram_chk_handler(int nb_params, char **params)
+{
+	char *c;
+	uint32_t base;
+	uint32_t length;
+	int dmode = 2; /* default: random data*/
+
+	if (nb_params < 2) {
+		printf("sdram_bist_chk <base> <length> [<data_mode>]\n");
+		printf("base     : base address (starts at zero)\n");
+		printf("length   : DMA block size in bytes\n");
+		printf("data_mode: 0=pattern, 1=inc, 2=random");
+		return;
+	}
+	base = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Incorrect base");
+		return;
+	}
+	length = strtoul(params[1], &c, 0);
+	if (*c != 0) {
+		printf("Incorrect length");
+		return;
+	}
+	if (nb_params > 2) {
+		dmode = strtoul(params[2], &c, 0);
+		if (*c != 0) {
+			printf("Incorrect data_mode");
+			return;
+		}
+	}
+	sdram_bist_chk(base, length, dmode);
+}
+define_command(sdram_bist_chk, sdram_chk_handler, "Run SDRAM Build-In Self-Test Checker", LITEDRAM_CMDS);
+
+/**
+ * Command "sdram_bist"
+ *
+ * Run SDRAM Build-In Self-Test (BIST)
+ *
+ */
+static void sdram_bist_handler(int nb_params, char **params)
+{
+	char *c;
+	uint32_t length;
+	int amode = 1; /* default: increment */
+	int dmode = 2; /* default: random data*/
+	int wmode = 2; /* default: write before each read */
+
+	if (nb_params < 1) {
+		printf("sdram_bist <length> [<addr_mode>] [<data_mode>] [<write_mode>]\n");
+		printf("length    : DMA block size in bytes\n");
+		printf("addr_mode : 0=fixed (starts at zero), 1=inc, 2=random\n");
+		printf("data_mode : 0=pattern, 1=inc, 2=random\n");
+		printf("write_mode: 0=no_write, 1=write_once, 2=write_and_read");
+		return;
+	}
+	length = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Incorrect length");
+		return;
+	}
+	if (nb_params > 1) {
+		amode = strtoul(params[1], &c, 0);
+		if (*c != 0) {
+			printf("Incorrect addr_mode");
+			return;
+		}
+	}
+	if (nb_params > 2) {
+		dmode = strtoul(params[2], &c, 0);
+		if (*c != 0) {
+			printf("Incorrect data_mode");
+			return;
+		}
+	}
+	if (nb_params > 3) {
+		wmode = strtoul(params[3], &c, 0);
+		if (*c != 0) {
+			printf("Incorrect write_once");
+			return;
+		}
+	}
+	sdram_bist(length, amode, dmode, wmode);
 }
 define_command(sdram_bist, sdram_bist_handler, "Run SDRAM Build-In Self-Test", LITEDRAM_CMDS);
-#endif
+#endif /* defined(CSR_SDRAM_GENERATOR_BASE) && defined(CSR_SDRAM_CHECKER_BASE) */
 
 #ifdef CSR_DDRPHY_RDPHASE_ADDR
 /**
