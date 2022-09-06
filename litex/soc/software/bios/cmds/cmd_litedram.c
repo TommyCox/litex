@@ -45,6 +45,49 @@ define_command(sdram_cal, sdram_cal_handler, "Calibrate SDRAM", LITEDRAM_CMDS);
 #endif
 
 /**
+ * Command "sdram_bitslip_scrub"
+ * 
+ * Set SDRAM bitslip to last known good configuration.
+ * 
+ */
+#if defined(CSR_SDRAM_BASE) && defined(CSR_DDRPHY_BASE)
+static void sdram_scrub_bitslip_handler(int nb_params, char **params)
+{
+	sdram_bitslip_scrub();
+}
+define_command(sdram_bitslip_scrub, sdram_scrub_bitslip_handler, "Set SDRAM bitslip to last known good configuration.", LITEDRAM_CMDS);
+#endif
+
+/**
+ * Command "sdram_bitslip_set"
+ * 
+ * Set SDRAM bitslip.
+ * 
+ */
+#if defined(CSR_SDRAM_BASE) && defined(CSR_DDRPHY_BASE)
+static void sdram_set_bitslip_handler(int nb_params, char **params)
+{
+	char *c;
+	int module, bitslip;
+
+	if (nb_params < 2) {
+		printf("sdram_bitslip_set <module> <bitslip>");
+	}
+
+	module = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Invalid module.");
+	}
+	bitslip = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Invalid bitslip.");
+	}
+	sdram_bitslip_set(module, bitslip);
+}
+define_command(sdram_bitslip_set, sdram_set_bitslip_handler, "Set SDRAM bitslip.", LITEDRAM_CMDS);
+#endif
+
+/**
  * Command "sdram_test"
  *
  * Test SDRAM
