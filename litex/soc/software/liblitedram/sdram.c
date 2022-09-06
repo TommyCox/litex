@@ -975,6 +975,27 @@ static unsigned int sdram_read_leveling_scan_module(int module, int bitslip, int
 
 #if defined(SDRAM_PHY_WRITE_LEVELING_CAPABLE) || defined(SDRAM_PHY_READ_LEVELING_CAPABLE)
 
+void sdram_bitslip_set(int module, int target_bitslip) {
+	sdram_read_leveling_rst_bitslip(module);
+	for (int bitslip=0; bitslip<target_bitslip; bitslip++)
+		sdram_read_leveling_inc_bitslip(module);
+}
+
+void sdram_bitslip_load(int module, int target_bitslip, bool save) {
+	// Create storage for bitslip values.
+	static int saved_bitslip[SDRAM_PHY_MODULES];
+	// Update values (on calibration).
+	if (save)
+		saved_bitslip[module] = target_bitslip;
+	// Load bitslip from saved value.
+	sdram_bitslip_set(module, saved_bitslip[module]);
+}
+
+void sdram_bitslip_scrub(void) {
+	for (int module=0; module<SDRAM_PHY_MODULES; module++)
+		sdram_bitslip_load(module, 0, false);
+}
+
 void sdram_read_leveling(void)
 {
 	int module;
@@ -1007,9 +1028,7 @@ void sdram_read_leveling(void)
 
 		/* Select best read window */
 		printf("  best: m%d, b%02d ", module, best_bitslip);
-		sdram_read_leveling_rst_bitslip(module);
-		for (bitslip=0; bitslip<best_bitslip; bitslip++)
-			sdram_read_leveling_inc_bitslip(module);
+		sdram_bitslip_load(module, best_bitslip, true);
 
 		/* Re-do leveling on best read window*/
 		sdram_leveling_center_module(module, 1, 0,
