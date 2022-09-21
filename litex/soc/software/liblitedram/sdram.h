@@ -39,11 +39,18 @@ int sdram_write_leveling(void);
 void sdram_read_leveling(void);
 
 /*-----------------------------------------------------------------------*/
-/* Bitslip
+/* Bitslip                                                               */
 /*-----------------------------------------------------------------------*/
 void sdram_bitslip_scrub(void);
 void sdram_bitslip_load(int module, int target_bitslip, bool save);
 void sdram_bitslip_set(int module, int target_bitslip);
+
+/*-----------------------------------------------------------------------*/
+/* Delays                                                                */
+/*-----------------------------------------------------------------------*/
+void sdram_delay_scrub(void);
+void sdram_delay_load(int module, int target_delay, bool save);
+void sdram_delay_set(int module, int target_delay);
 
 /*-----------------------------------------------------------------------*/
 /* Leveling                                                              */

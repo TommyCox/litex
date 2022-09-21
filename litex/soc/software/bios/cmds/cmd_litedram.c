@@ -88,6 +88,49 @@ define_command(sdram_bitslip_set, sdram_set_bitslip_handler, "Set SDRAM bitslip.
 #endif
 
 /**
+ * Command "sdram_delay_scrub"
+ * 
+ * Set SDRAM delay to last known good configuration.
+ * 
+ */
+#if defined(CSR_SDRAM_BASE) && defined(CSR_DDRPHY_BASE)
+static void sdram_scrub_delay_handler(int nb_params, char **params)
+{
+	sdram_delay_scrub();
+}
+define_command(sdram_delay_scrub, sdram_scrub_delay_handler, "Set SDRAM delay to last known good configuration.", LITEDRAM_CMDS);
+#endif
+
+/**
+ * Command "sdram_delay_set"
+ * 
+ * Set SDRAM delay.
+ * 
+ */
+#if defined(CSR_SDRAM_BASE) && defined(CSR_DDRPHY_BASE)
+static void sdram_set_delay_handler(int nb_params, char **params)
+{
+	char *c;
+	int module, delay;
+
+	if (nb_params < 2) {
+		printf("sdram_delay_set <module> <delay>");
+	}
+
+	module = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Invalid module.");
+	}
+	delay = strtoul(params[0], &c, 0);
+	if (*c != 0) {
+		printf("Invalid delay.");
+	}
+	sdram_delay_set(module, delay);
+}
+define_command(sdram_delay_set, sdram_set_delay_handler, "Set SDRAM delay.", LITEDRAM_CMDS);
+#endif
+
+/**
  * Command "sdram_test"
  *
  * Test SDRAM
