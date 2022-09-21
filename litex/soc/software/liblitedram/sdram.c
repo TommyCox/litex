@@ -452,12 +452,15 @@ static void sdram_leveling_center_module(
 		int retries = 8; /* Do N configs/checks and give up if failing */
 		while (retries > 0) {
 			/* Set delay. */
-			rst_delay(module);
-			cdelay(100);
-			for(i = 0; i < delay_mid; i++) {
-				inc_delay(module);
-				cdelay(100);
-			}
+			// rst_delay(module);
+			// cdelay(100);
+			// for(i = 0; i < delay_mid; i++) {
+			// 	inc_delay(module);
+			// 	cdelay(100);
+			// }
+
+			// NOTE: Alternative setting hack for experiment only.
+			sdram_delay_load(module, delay_mid, true);
 
 			/* Check */
 			errors  = sdram_write_read_check_test_pattern(module, 42);
@@ -965,6 +968,32 @@ static unsigned int sdram_read_leveling_scan_module(int module, int bitslip, int
 		printf("| ");
 
 	return score;
+}
+
+void sdram_delay_set(int module, int target_delay) {
+	// NOTE: sdram_leveling_center_module uses callbacks
+	//       so this is an experiment-specific hack until
+	//       generalized.
+	sdram_read_leveling_rst_delay(module);
+	// Omitted cdelay(100); here.
+	for (int delay=0; delay<target_delay; delay++)
+		sdram_read_leveling_inc_delay(module);
+		// Omitted cdelay(100); after increment.
+}
+
+void sdram_delay_load(int module, int target_delay, bool save) {
+	// Create storage for delay values.
+	static int saved_delay[SDRAM_PHY_MODULES];
+	// Update values (on calibration).
+	if (save)
+		saved_delay[module] = target_delay;
+	// Load delay from saved value.
+	sdram_delay_set(module, saved_delay[module]);
+}
+
+void sdram_delay_scrub(void) {
+	for (int module=0; module<SDRAM_PHY_MODULES; module++)
+		sdram_delay_load(module, 0, false);
 }
 
 #endif /* CSR_DDRPHY_BASE */
