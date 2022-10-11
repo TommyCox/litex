@@ -71,16 +71,17 @@ static void sdram_set_bitslip_handler(int nb_params, char **params)
 	int module, bitslip;
 
 	if (nb_params < 2) {
-		printf("sdram_bitslip_set <module> <bitslip>");
+		printf("sdram_bitslip_set <module> <bitslip>\n");
+		return;
 	}
 
 	module = strtoul(params[0], &c, 0);
 	if (*c != 0) {
-		printf("Invalid module.");
+		printf("Invalid module.\n");
 	}
 	bitslip = strtoul(params[0], &c, 0);
 	if (*c != 0) {
-		printf("Invalid bitslip.");
+		printf("Invalid bitslip.\n");
 	}
 	sdram_bitslip_set(module, bitslip);
 }
@@ -114,16 +115,17 @@ static void sdram_set_delay_handler(int nb_params, char **params)
 	int module, delay;
 
 	if (nb_params < 2) {
-		printf("sdram_delay_set <module> <delay>");
+		printf("sdram_delay_set <module> <delay>\n");
+		return;
 	}
 
 	module = strtoul(params[0], &c, 0);
 	if (*c != 0) {
-		printf("Invalid module.");
+		printf("Invalid module.\n");
 	}
 	delay = strtoul(params[0], &c, 0);
 	if (*c != 0) {
-		printf("Invalid delay.");
+		printf("Invalid delay.\n");
 	}
 	sdram_delay_set(module, delay);
 }
