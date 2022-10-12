@@ -21,6 +21,7 @@ void sdram_software_control_off(void);
 /* Mode Register                                                         */
 /*-----------------------------------------------------------------------*/
 void sdram_mode_register_write(char reg, int value);
+void sdram_mode_register_scrub(void);
 
 /*-----------------------------------------------------------------------*/
 /* Write Leveling                                                        */

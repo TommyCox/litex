@@ -565,6 +565,22 @@ define_command(sdram_mr_write, sdram_mr_write_handler, "Write SDRAM Mode Registe
 #endif
 
 /**
+ * Command "sdram_mr_scrub"
+ *
+ * Reset SDRAM Mode Register to defaults.
+ *
+ */
+#if defined(CSR_SDRAM_BASE)
+static void sdram_mr_scrub_handler(int nb_params, char **params)
+{
+	sdram_software_control_on();
+	sdram_mode_register_scrub();
+	sdram_software_control_off();
+}
+define_command(sdram_mr_scrub, sdram_mr_scrub_handler, "Reset SDRAM Mode Register to defaults.", LITEDRAM_CMDS);
+#endif
+
+/**
  * Command "sdram_spd"
  *
  * Read contents of SPD EEPROM memory.
