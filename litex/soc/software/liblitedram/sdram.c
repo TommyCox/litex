@@ -250,6 +250,11 @@ void sdram_mode_register_write(char reg, int value) {
 	command_p0(DFII_COMMAND_RAS|DFII_COMMAND_CAS|DFII_COMMAND_WE|DFII_COMMAND_CS);
 }
 
+void sdram_mode_register_scrub(void) {
+	printf("Setting SDRAM Mode Register to defaults.\n");
+	init_sequence();
+}
+
 #ifdef CSR_DDRPHY_BASE
 
 /*-----------------------------------------------------------------------*/
