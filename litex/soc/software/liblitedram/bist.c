@@ -16,7 +16,7 @@
 #include <liblitedram/bist.h>
 
 /* un-comment to flip random bits in SDRAM */
-#define INJECT_ERRORS
+// #define INJECT_ERRORS
 
 /* un-comment to print detail about errors */
 #define DISPLAY_ERRORS
@@ -27,6 +27,7 @@
 
 #define SDRAM_TEST_BASE 0x00000000
 #define SDRAM_TEST_DATA_BYTES (CONFIG_BIST_DATA_WIDTH/8)
+#define SDRAM_TEST_DATA_WORDS (SDRAM_TEST_DATA_BYTES/sizeof(uint32_t))
 
 #if defined(CSR_SDRAM_ECCR_BASE)
 #define SDRAM_TEST_SIZE MAIN_RAM_SIZE/2
@@ -167,24 +168,19 @@ static void display_errors(uint32_t base, uint32_t length, int dmode) {
 		} while (ptr < end);
 		break;}
 	case 1: {
-		uint32_t val = 0;
+		uint32_t i = 0, cnt = 0;
 		do {
-			if (*ptr++ != val++ && errors++ < MAX_ERR_PRINT)
+			uint32_t val = ((i++ % SDRAM_TEST_DATA_WORDS) ? 0 : cnt++);
+			if (*ptr++ != val && errors++ < MAX_ERR_PRINT)
 				printf("error addr: 0x%08lx, content: 0x%08lx, expected: 0x%08lx\n",
-					(unsigned long)(ptr - 1), *(ptr - 1), val - 1);
-			if (ptr >= end) break;
-#if SDRAM_TEST_DATA_BYTES == 8
-			if (*ptr++ != 0 && errors++ < MAX_ERR_PRINT)
-				printf("error addr: 0x%08lx, content: 0x%08lx, expected: 0x%08x\n",
-					(unsigned long)(ptr - 1), *(ptr - 1), 0);
-#endif
+					(unsigned long)(ptr - 1), *(ptr - 1), val);
 		} while (ptr < end);
 		break;}
 	case 2:
 		/* not implemented */
 		break;
 	}
-	printf("ERRORS: %lu\n", errors);
+	printf("ERRORS (32-bit words): %lu\n", errors);
 }
 
 #define TARGET_BYTES 0x20000
