@@ -35,7 +35,7 @@
 #define SDRAM_TEST_SIZE MAIN_RAM_SIZE
 #endif
 
-#define MAX_ERR_PRINT 10
+#define MAX_ERR_PRINT 100
 
 static uint32_t wr_ticks;
 static uint32_t wr_length;
@@ -283,17 +283,19 @@ void sdram_bist_chk(uint32_t base, uint32_t length, int dmode) {
 	while (sdram_checker_done_read() == 0);
 
 	errors = sdram_checker_errors_read();
+
 #if defined(CSR_SDRAM_ECCR_BASE)
 	sec = sdram_eccr_sec_errors_read();
 	ded = sdram_eccr_ded_errors_read();
 	errors += sec + ded;
 #endif
 
-	if (errors) {
+	printf("ERRORS (%d-bit words): %d\n", SDRAM_TEST_DATA_BYTES * 8, errors);
+
 #if defined(DISPLAY_ERRORS) && !defined(CSR_SDRAM_ECCR_BASE)
+	if (errors)
 		display_errors(base, length, dmode);
 #endif
-	} else printf("ERRORS: 0\n");
 }
 
 void sdram_bist(uint32_t length, int amode, int dmode, int wmode) {
