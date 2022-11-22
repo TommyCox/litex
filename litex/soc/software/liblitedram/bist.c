@@ -16,7 +16,7 @@
 #include <liblitedram/bist.h>
 
 /* un-comment to flip random bits in SDRAM */
-#define INJECT_ERRORS
+// #define INJECT_ERRORS
 
 /* un-comment to print detail about errors */
 #define DISPLAY_ERRORS
@@ -34,7 +34,7 @@
 #define SDRAM_TEST_SIZE MAIN_RAM_SIZE
 #endif
 
-#define MAX_ERR_PRINT 10
+#define MAX_ERR_PRINT 100
 
 static uint32_t wr_ticks;
 static uint32_t wr_length;
@@ -167,6 +167,11 @@ static void display_errors(uint32_t base, uint32_t length, int dmode) {
 		} while (ptr < end);
 		break;}
 	case 1: {
+		/* BROKEN: Doesn't match hardware write pattern.
+		Hardware currently writes incremented value to the first of every 4 words, zeroing the rest.
+		This checks for the incremented value every word.
+		Should probably modify the hardware to match the behavior seen here.
+		*/
 		uint32_t val = 0;
 		do {
 			if (*ptr++ != val++ && errors++ < MAX_ERR_PRINT)
@@ -184,7 +189,7 @@ static void display_errors(uint32_t base, uint32_t length, int dmode) {
 		/* not implemented */
 		break;
 	}
-	printf("ERRORS: %lu\n", errors);
+	printf("ERRORS (CPU): %lu\n", errors);
 }
 
 #define TARGET_BYTES 0x20000
@@ -287,17 +292,19 @@ void sdram_bist_chk(uint32_t base, uint32_t length, int dmode) {
 	while (sdram_checker_done_read() == 0);
 
 	errors = sdram_checker_errors_read();
+
 #if defined(CSR_SDRAM_ECCR_BASE)
 	sec = sdram_eccr_sec_errors_read();
 	ded = sdram_eccr_ded_errors_read();
 	errors += sec + ded;
 #endif
 
-	if (errors) {
+	printf("ERRORS (BIST): %d\n", errors);
+
 #if defined(DISPLAY_ERRORS) && !defined(CSR_SDRAM_ECCR_BASE)
+	if (errors)
 		display_errors(base, length, dmode);
 #endif
-	} else printf("ERRORS: 0\n");
 }
 
 void sdram_bist(uint32_t length, int amode, int dmode, int wmode) {
