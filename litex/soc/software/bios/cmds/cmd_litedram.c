@@ -264,15 +264,15 @@ static void sdram_bist_handler(int nb_params, char **params)
 	char *c;
 	uint32_t length;
 	int amode = 1; /* default: increment */
-	int dmode = 2; /* default: random data*/
+	int dmode = 0; /* default: pattern data*/
 	int wmode = 2; /* default: write before each read */
 
 	if (nb_params < 1) {
 		printf("sdram_bist <length> [<addr_mode>] [<data_mode>] [<write_mode>]\n");
 		printf("length    : DMA block size in bytes\n");
-		printf("addr_mode : 0=fixed (starts at zero), 1=inc, 2=random\n");
-		printf("data_mode : 0=pattern, 1=inc, 2=random\n");
-		printf("write_mode: 0=no_write, 1=write_once, 2=write_and_read");
+		printf("addr_mode : 0=fixed (starts at zero), 1=inc, 2=random (default: %d)\n", amode);
+		printf("data_mode : 0=pattern, 1=inc, 2=random (default: %d)\n", dmode);
+		printf("write_mode: 0=no_write, 1=write_once, 2=write_and_read (default: %d)", wmode);
 		return;
 	}
 	length = strtoul(params[0], &c, 0);
