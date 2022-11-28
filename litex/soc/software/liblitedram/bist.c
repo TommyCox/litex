@@ -248,6 +248,8 @@ static void sdram_bist_loop(uint32_t length, int amode, int dmode) {
 		errors += sec + ded;
 #endif
 		if (errors) {
+			printf("ERRORS (%d-bit words): %d\n", SDRAM_TEST_DATA_BYTES * 8, errors);
+			
 #if defined(DISPLAY_ERRORS) && !defined(CSR_SDRAM_ECCR_BASE)
 			display_errors(base, length, dmode);
 #endif
